@@ -1,3 +1,5 @@
+![](http://i.imgur.com/lxyHrRK.png =341x295)
+
 # BurpSmartBuster
 
 A Burp Suite content discovery plugin that add the smart into the Buster!
