@@ -10,4 +10,6 @@ Will be release on August 6th at [DEF CON Demolabs](https://defcon.org/html/defc
 
 Come say hi and let's discuss this plugin!
 
-**Stay tuned for more**
+## Installation
+
+[See Wiki page](https://github.com/pathetiq/BurpSmartBuster/wiki)
