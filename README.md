@@ -13,3 +13,9 @@ Come say hi and let's discuss this plugin!
 ## Installation
 
 [See Wiki page](https://github.com/pathetiq/BurpSmartBuster/wiki)
+
+## Code workflow and options
+
+See the Presentation PDF.
+
+More information to come in the wiki.
