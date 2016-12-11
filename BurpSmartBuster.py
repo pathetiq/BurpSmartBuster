@@ -4,23 +4,29 @@ Created on 2015-02-22
 
 BurpSmartBuster
 @author: @pathetiq
-@version: 0.1
+@version: 0.2
 @summary: This is a Burp Suite extension which discover content with a smart touch. A bit like “DirBuster” and “Burp Discover Content”,
           but smarter and being integrated into Burp Suite this plugin looks at words in pages, the domain name, the current directories and filename
           to help you find hidden files, directories and information you usually don't with a static dictionary file that brute force its way on the web server.
 
 @bug: URL with variable, no file, no extension or weird variable separate by ; :, etc. breaks the directories/files listing
-@todo: browse and analyse robots.txt, add issue
+@todo: technology detection and scanning, community files, add 404 detection in output, threads speeds and adjustments
+@todo: Add results to an issue. add tested files somewhere, add found file to sitemap.
 
 '''
 #sys imports
 import sys
-#TODO: find that path automatically
-#sys.path.append("/home/patoff/.local/lib/python2.7/site-packages/")
-sys.path.append("/usr/local/lib/python2.7/site-packages")
+
+#Find the jython path where our prerequisites packages are installed
+import site
+for site in site.getsitepackages():
+    sys.path.append(site)
+#Examples of paths if needed
+#sys.path.append("/home/USERNAME/.local/lib/python2.7/site-packages/")
+#sys.path.append("/usr/local/lib/python2.7/site-packages")
 ##sys.path.append("/usr/lib/python2.7/dist-packages/")
-sys.path.append("/home/patoff/Documents/Apps/TextBlob")
-sys.path.append("/home/patoff/Documents/Apps/nltk")
+#sys.path.append("/home/USERNAME/Documents/Apps/TextBlob")
+#sys.path.append("/home/USERNAME/Documents/Apps/nltk")
 
 #burp imports
 from burp import IBurpExtender
@@ -182,12 +188,21 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
 
         return
 
+    '''
+    Extension Unloaded
+    '''
     def extensionUnloaded(self):
         self._logger.info("Extension was unloaded")
         return
 
+    '''
+    VERBOSE FUNCTION
+    Display each URL tested
+    '''
     def verbose(self,text):
-        print "[VERBOSE]: "+text
+        #Is verbose on or off from config file?
+        if self._verbose:
+            print "[VERBOSE]: "+text
         return
 
     '''
@@ -633,26 +648,6 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
         #filter out: gif,jpg,png,css,ico
 
 
-
-
-
-        '''
-        Complete URL: http://icanhazip.com:80/q/a/b/c/asd.asd?a=b
-        Domain: icanhazip.com
-        Netloc: icanhazip.com:80
-        Query value: b
-        Query var: a
-        Directories: 'q', 'a', 'b', 'c'
-        Directories2: ['q', 'a', 'b', 'c'] == directories var
-        Directory: q/a/b/c
-        File Extension: asd
-        URL Path: /q/a/b/c/asd.asd
-        Filename: asd
-        Base URL: http://icanhazip.com
-        data = UrlData(url,domain,netloc,directories,params,fileExt,baseURL,completeURL,responseData,self._logger)
-        '''
-
-
     '''----------------------------------------------------------------------------------------------------------
     Get the data for smartRequest(), it will fills our list of words which will be our smart logic data to create
     multiple new HTTP requests. This data should be gather once.
@@ -979,9 +974,6 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
     This functions split all informations of the URL for further use in the smartRequest function
     @param messageInfo: last request executed with all its information
     '''
-    #TODO: get subdomain value
-    #TODO: get domain without tld
-    #TODO: Should we move this to URLparse API instead of manually doing it? fix the netloc error with urlpse
     def getURLdata(self,messageInfo,messageIsRequest):
 
 
@@ -1056,22 +1048,6 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
         print "URL Path: "+path
         print "Filename: "+filename
         print "Base URL: "+baseURL
-
-
-        ==
-        Complete URL: http://icanhazip.com:80/q/a/b/c/asd.asd?a=b
-        Domain: icanhazip.com
-        Netloc: icanhazip.com:80
-        Query value: b
-        Query var: a
-        Directories: 'q', 'a', 'b', 'c'
-        Directories2: ['q', 'a', 'b', 'c']
-        Directory: q/a/b/c
-        File Extension: asd
-        URL Path: /q/a/b/c/asd.asd
-        Filename: asd
-        Base URL: http://icanhazip.com
-        data = UrlData(url,domain,netloc,directories,params,fileExt,baseURL,completeURL,responseData,self._logger)
         '''
 
         responseData = ""
@@ -1096,7 +1072,11 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
             return 0
 
 
+'''
+Multithreaded class to execute queries out of the Queue.Queue
 
+Also get the response and validate the 404 type
+'''
 class RequestorWorker(threading.Thread):
 
     def __init__(self, threadID, name, queue, responseQueue, logger, requestor):
@@ -1104,7 +1084,7 @@ class RequestorWorker(threading.Thread):
         #Sahred Queue between Thread Workers
         self._id = threadID
         self._name = name
-        self._queue = queue
+        self._queue = queue #request queue received from the Requestor
         self._threadLock = threading.Lock()
         self._alive = True
         threading.Thread.__init__(self)
@@ -1312,8 +1292,9 @@ class Requestor():
 
         #get the 404 details for the current domain
         #print "ADDING: "+ url
-        #self._define404(data)
-        self._requestQueue.put(url)
+
+        #type404 = self._define404(data)
+        self._requestQueue.put(url) ##see if we can put the type404 inside the queue along with the url
         return
 
 
