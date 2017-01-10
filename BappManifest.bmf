@@ -1,0 +1,10 @@
+Uuid: 7044ef35fa5a49b39285e101a79bf4ae
+ExtensionType: 2
+Name: BurpSmartBuster
+ScreenVersion: 0.2                                                                                                      
+SerialVersion: 1
+MinPlatformVersion: 0                                                                                                    
+ProOnly: False
+Author: Alexandre Borges
+ShortDescription: A Burp Suite content discovery plugin that adds the smart into the Buster!
+EntryPoint: BurpSmartBuster.py
