@@ -27,11 +27,11 @@ A Burp Suite content discovery plugin that add the smart into the Buster!
 * Use the spidering results for actual brute forcing
 * Adjust the 404 detection function
 
-
 ## Presentations and release date
 
 * BSB was released on August 6th 2016 at [DEF CON 24 Demolabs](https://defcon.org/html/defcon-24/dc-24-demolabs.html) in the Grand Salon. 
 * An updated talk about the tool and it's future has been done at [Derbycon 6.0](https://www.youtube.com/watch?v=RFxUfoVgMrw).
+* French version of the talk given at [Hackfest.ca 2016](https://www.youtube.com/watch?v=yIC9zmKLoxg)
 
 ## Code workflow and options
 
