@@ -6,5 +6,5 @@ SerialVersion: 2
 MinPlatformVersion: 2                                                                                                    
 ProOnly: False
 Author: Alexandre Borges
-ShortDescription: A Burp Suite content discovery plugin that adds the smart into the Buster!
+ShortDescription: Looks for files, directories and file extensions based on current requests received by Burp Suite
 EntryPoint: BurpSmartBuster.py
