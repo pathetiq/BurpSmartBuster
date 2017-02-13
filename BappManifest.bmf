@@ -1,6 +1,7 @@
 Uuid: 7044ef35fa5a49b39285e101a79bf4ae
 ExtensionType: 2
 Name: BurpSmartBuster
+RepoName: burp-smart-buster
 ScreenVersion: 0.2                                                                                                      
 SerialVersion: 2
 MinPlatformVersion: 2                                                                                                    
