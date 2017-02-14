@@ -3,7 +3,7 @@ ExtensionType: 2
 Name: BurpSmartBuster
 RepoName: burp-smart-buster
 ScreenVersion: 0.2                                                                                                      
-SerialVersion: 2
+SerialVersion: 3
 MinPlatformVersion: 2                                                                                                    
 ProOnly: False
 Author: Alexandre Borges
