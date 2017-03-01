@@ -6,7 +6,9 @@ A Burp Suite content discovery plugin that add the smart into the Buster!
 
 ## Installation
 
-[See Wiki page](https://github.com/pathetiq/BurpSmartBuster/wiki)
+- Now inside Burp Suite Store
+- Or [See Wiki page](https://github.com/pathetiq/BurpSmartBuster/wiki) for manual installation
+
 
 # Features
 
