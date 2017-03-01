@@ -6,6 +6,6 @@ ScreenVersion: 0.2
 SerialVersion: 3
 MinPlatformVersion: 2                                                                                                    
 ProOnly: False
-Author: Alexandre Borges
+Author: Patrick Mathieu @pathetiq
 ShortDescription: Looks for files, directories and file extensions based on current requests received by Burp Suite
 EntryPoint: BurpSmartBuster.py
