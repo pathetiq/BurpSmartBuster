@@ -1071,6 +1071,12 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
         else:
             return 0
 
+    def doPassiveScan(self, baseRequestResponse):
+        pass
+
+    def doActiveScan(self, baseRequestResponse, insertionPoint):
+        pass
+
 
 '''
 Multithreaded class to execute queries out of the Queue.Queue
