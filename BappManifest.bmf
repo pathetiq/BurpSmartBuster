@@ -9,3 +9,4 @@ ProOnly: False
 Author: Patrick Mathieu @pathetiq
 ShortDescription: Looks for files, directories and file extensions based on current requests received by Burp Suite
 EntryPoint: BurpSmartBuster.py
+BuildCommand: rm *.pdf
