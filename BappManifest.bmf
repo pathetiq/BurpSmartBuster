@@ -2,9 +2,9 @@ Uuid: 7044ef35fa5a49b39285e101a79bf4ae
 ExtensionType: 2
 Name: BurpSmartBuster
 RepoName: burp-smart-buster
-ScreenVersion: 0.2                                                                                                      
+ScreenVersion: 0.3
 SerialVersion: 3
-MinPlatformVersion: 2                                                                                                    
+MinPlatformVersion: 2
 ProOnly: False
 Author: Patrick Mathieu @pathetiq
 ShortDescription: Looks for files, directories and file extensions based on current requests received by Burp Suite
