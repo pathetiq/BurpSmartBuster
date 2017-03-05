@@ -122,7 +122,7 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
         print('================================')
         print('This extension will create new requests for ALL "in scope" HTTP request made through Burp. Make sure to filter scope items')
         print('For help or any information see the github page or contact the author on twitter.')
-        print('Note: Spider currently only support English, see author github page for new language installation instructions')
+        print('Note: The Spider currently only supports English, see author github page for new language installation instructions')
 
         # set our extension name
         callbacks.setExtensionName(self.EXTENSION_NAME)
