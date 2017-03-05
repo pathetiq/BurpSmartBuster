@@ -14,6 +14,9 @@ BurpSmartBuster
 @todo: Add results to an issue. add tested files somewhere, add found file to sitemap.
 
 '''
+import os
+os.environ["NLTK_DATA"] = os.path.join(os.getcwd(), "nltk_data")
+
 #sys imports
 import sys
 
@@ -40,7 +43,6 @@ from burp import IBurpExtenderCallbacks
 from array import array
 from java.io import PrintWriter
 from java.net import URL
-import os
 import ConfigParser
 import json
 import logging
