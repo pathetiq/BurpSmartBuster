@@ -4,7 +4,7 @@ Created on 2015-02-22
 
 BurpSmartBuster
 @author: @pathetiq
-@version: 0.2
+@version: 0.3
 @summary: This is a Burp Suite extension which discover content with a smart touch. A bit like “DirBuster” and “Burp Discover Content”,
           but smarter and being integrated into Burp Suite this plugin looks at words in pages, the domain name, the current directories and filename
           to help you find hidden files, directories and information you usually don't with a static dictionary file that brute force its way on the web server.
@@ -35,6 +35,10 @@ from burp import IScannerCheck
 from burp import IScannerInsertionPoint
 from burp import IHttpListener
 from burp import IBurpExtenderCallbacks
+from burp import IContextMenuFactory
+from javax.swing import JMenuItem
+from java.util import List, ArrayList
+from java.net import URL
 
 #utils imports
 from array import array
@@ -100,7 +104,7 @@ class Logger():
 '''----------------------------------------------------------------------------------------------------------------------------------------
 BurpSmartBuster main class (BurpExtender)
 ----------------------------------------------------------------------------------------------------------------------------------------'''
-class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPoint,IHttpListener, IBurpExtenderCallbacks):
+class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPoint,IHttpListener, IBurpExtenderCallbacks, IContextMenuFactory):
 
     # definitions
     EXTENSION_NAME = "BurpSmartBuster"
@@ -125,6 +129,9 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
         callbacks.setExtensionName(self.EXTENSION_NAME)
         callbacks.registerScannerCheck(self)
         callbacks.registerHttpListener(self)
+        callbacks.registerContextMenuFactory(self)
+
+
 
         #set default config file name and values
         self._configFile = "bsb.ini"
@@ -188,6 +195,25 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
 
         return
 
+    # guly
+    def createMenuItems(self, contextMenuInvocation):
+        self._contextMenuData = contextMenuInvocation.getSelectedMessages()
+        menu_list = ArrayList()
+        menu_list.add(JMenuItem("Send to BurpSmartBuster",actionPerformed=self.menuItemClicked))
+        return menu_list
+
+    def menuItemClicked(self, event):
+        data = self.getURLdata(self._contextMenuData[0],True)
+        self._logger.info("SMARTREQUEST FOR: "+data.getUrl().toString())
+        self._logger.debug("Executing: smartRequest()")
+        thread = threading.Thread(
+        target=self.smartRequest,
+        name="Thread-smartRequest",
+        args=[data],
+        )
+        thread.start()
+    # end guly
+
     '''
     Extension Unloaded
     '''
@@ -218,7 +244,7 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
         #TODO: not from repeater and intruder --> set in ini file too! --> and toolFlag != self._callbacks.TOOL_EXTENDER
 
         #This is required to not LOOP Forever as our plugin generate requests!
-        if toolFlag == self._callbacks.TOOL_PROXY and toolFlag != self._callbacks.TOOL_EXTENDER:
+        if toolFlag == self._callbacks.TOOL_PROXY and toolFlag != self._callbacks.TOOL_EXTENDER and toolFlag != self._callbacks.TOOL_SCANNER:
 
             #Get an Urldata object to use later
             data = self.getURLdata(messageInfo,messageIsRequest)
@@ -349,7 +375,6 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
     @param data: UrlData object containing all information about the URL
     ----------------------------------------------------------------------------------------------------------'''
     def smartRequest(self,data):
-
         #Current request variables
         domain = data.getDomain()
         url = data.getUrl()
@@ -1076,6 +1101,7 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
 
     def doActiveScan(self, baseRequestResponse, insertionPoint):
         pass
+
 
 
 '''
