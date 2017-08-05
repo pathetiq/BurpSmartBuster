@@ -4,7 +4,8 @@ Created on 2015-02-22
 
 BurpSmartBuster
 @author: @pathetiq
-@version: 0.2
+@thanks: Abhineet & @theguly
+@version: 0.3
 @summary: This is a Burp Suite extension which discover content with a smart touch. A bit like “DirBuster” and “Burp Discover Content”,
           but smarter and being integrated into Burp Suite this plugin looks at words in pages, the domain name, the current directories and filename
           to help you find hidden files, directories and information you usually don't with a static dictionary file that brute force its way on the web server.
@@ -39,10 +40,21 @@ from burp import IScannerInsertionPoint
 from burp import IHttpListener
 from burp import IBurpExtenderCallbacks
 
+#UI Import
+from burp import IContextMenuFactory
+from java.util import List, ArrayList
+from burp import ITab
+from javax.swing import JPanel, JLabel, JMenuItem, JTextField, JList, DefaultListModel, JButton, JFileChooser
+from javax.swing import JScrollPane, ListSelectionModel, GroupLayout, ButtonGroup, JRadioButton
+from java.awt import Dimension
+from java.awt import Toolkit
+from java.awt.datatransfer import StringSelection
+
 #utils imports
 from array import array
 from java.io import PrintWriter
 from java.net import URL
+import os
 import ConfigParser
 import json
 import logging
@@ -72,13 +84,15 @@ locals()
 from textblob import TextBlob
 
 
+
+
 '''----------------------------------------------------------------------------------------------------------------------------------------
 BurpSmartBuster Logging object and config
 ----------------------------------------------------------------------------------------------------------------------------------------'''
 class Logger():
 
     LOG_FILENAME = 'BSB.log'
-    DEFAULT_LEVEL = logging.INFO
+    DEFAULT_LEVEL = logging.DEBUG
 
     def __init__(self,name=LOG_FILENAME,level=DEFAULT_LEVEL):
 
@@ -102,7 +116,7 @@ class Logger():
 '''----------------------------------------------------------------------------------------------------------------------------------------
 BurpSmartBuster main class (BurpExtender)
 ----------------------------------------------------------------------------------------------------------------------------------------'''
-class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPoint,IHttpListener, IBurpExtenderCallbacks):
+class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPoint,IHttpListener, IBurpExtenderCallbacks, IContextMenuFactory, ITab):
 
     # definitions
     EXTENSION_NAME = "BurpSmartBuster"
@@ -128,31 +142,141 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
         callbacks.setExtensionName(self.EXTENSION_NAME)
         callbacks.registerScannerCheck(self)
         callbacks.registerHttpListener(self)
+        callbacks.registerContextMenuFactory(self)
+
+        #Initialize tab details
+
+        #fields of options setBounds(x,y,width,heigth)
+        self.verboseLabel = JLabel("Verbose")
+        self.verboseLabel.setBounds(10,10,130,30)
+
+        self.yesVerboseButton = JRadioButton("Yes")
+        self.yesVerboseButton.setSelected(True)
+        self.yesVerboseButton.setBounds(10,40,50,30)
+        self.noVerboseButton = JRadioButton("No")
+        self.noVerboseButton.setBounds(70,40,50,30)
+
+        self.buttonGroup = ButtonGroup()
+        self.buttonGroup.add(self.yesVerboseButton)
+        self.buttonGroup.add(self.noVerboseButton)
+
+        self.spiderPagesLabel = JLabel("Spider: Nbr of pages")
+        self.spiderPagesLabel.setBounds(10,70,200,30)
+        self.spiderPagesTextField = JTextField(300)
+        self.spiderPagesTextField.setText("5")
+        self.spiderPagesTextField.setBounds(10,100,300,30)
+        self.spiderPagesTextField.setPreferredSize( Dimension( 250, 20 ) )
+
+        self.spiderRecPagesLabel = JLabel("Recursive: Nbr of pages")
+        self.spiderRecPagesLabel.setBounds(10,130,250,30)
+        self.spiderRecPagesTextField = JTextField(300)
+        self.spiderRecPagesTextField.setText("3")
+        self.spiderRecPagesTextField.setBounds(10,160,300,30)
+        self.spiderRecPagesTextField.setPreferredSize( Dimension( 250, 20 ) )
+
+        self.fileTypeLabel = JLabel("Ignore Filetypes")
+        self.fileTypeLabel.setBounds(10,190,130,30)
+        self.fileTypeTextField = JTextField(300)
+        self.fileTypeTextField.setText("gif,jpg,png,css,js,ico,woff")
+        self.fileTypeTextField.setBounds(10,220,300,30)
+        self.fileTypeTextField.setPreferredSize( Dimension( 250, 20 ) )
+
+        self.inScopeLabel = JLabel("Scan in-scope URLs only?")
+        self.inScopeLabel.setBounds(10,250,200 ,30)
+
+        self.yesInScopeButton = JRadioButton("Yes")
+        self.yesInScopeButton.setBounds(10,280,50,30)
+        self.yesInScopeButton.setSelected(True)
+        self.noInScopeButton = JRadioButton("No")
+        self.noInScopeButton.setBounds(70,280,50,30)
+
+        self.buttonGroup1 = ButtonGroup()
+        self.buttonGroup1.add(self.yesInScopeButton)
+        self.buttonGroup1.add(self.noInScopeButton)
+
+        self.refreshConfigButton = JButton("Update Configuration", actionPerformed=self.updateConfig)
+        self.refreshConfigButton.setBounds(10,310,200,30)
+
+        #Jlist to contain the results
+        self.list = JList([])
+        self.list.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION)
+        self.list.setLayoutOrientation(JList.VERTICAL)
+        self.list.setVisibleRowCount(-1)
+        self.listScroller = JScrollPane(self.list,JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED)
+        self.listScroller.setBounds(510,40,500,500)
+        #self.listScroller.setPreferredSize(Dimension(400, 500))
+
+        self.urlFoundLabel = JLabel("URLs Found")
+        self.urlFoundLabel.setBounds(510,10,130,30)
+        self.listScroller.setPreferredSize(Dimension(500, 100))
+        self.listScroller.setViewportView(self.list)
+
+        self.clearListButton = JButton("Clear list", actionPerformed=self.clearList)
+        self.clearListButton.setBounds(350,40,150,30)
+
+        self.copyListButton = JButton("Copy Selected", actionPerformed=self.copyList)
+        self.copyListButton.setBounds(350,70,150,30)
+
+        self.deleteListButton = JButton("Delete Selected", actionPerformed=self.deleteSelected)
+        self.deleteListButton.setBounds(350,100,150,30)
+
+        self.exportListButton = JButton("Export list", actionPerformed=self.exportList)
+        self.exportListButton.setBounds(350,130,150,30)
+
+
+        #main panel
+        self.mainpanel = JPanel()
+        self.mainpanel.setLayout(None)
+
+        self.mainpanel.add(self.verboseLabel)
+        self.mainpanel.add(self.yesVerboseButton)
+        self.mainpanel.add(self.noVerboseButton)
+        self.mainpanel.add(self.spiderPagesLabel)
+        self.mainpanel.add(self.spiderPagesTextField)
+        self.mainpanel.add(self.spiderRecPagesLabel)
+        self.mainpanel.add(self.spiderRecPagesTextField)
+        self.mainpanel.add(self.fileTypeLabel)
+        self.mainpanel.add(self.fileTypeTextField)
+        self.mainpanel.add(self.inScopeLabel)
+        self.mainpanel.add(self.yesInScopeButton)
+        self.mainpanel.add(self.noInScopeButton)
+        self.mainpanel.add(self.refreshConfigButton)
+        self.mainpanel.add(self.urlFoundLabel)
+        self.mainpanel.add(self.listScroller)
+        self.mainpanel.add(self.clearListButton)
+        self.mainpanel.add(self.copyListButton)
+        self.mainpanel.add(self.deleteListButton)
+        self.mainpanel.add(self.exportListButton)
+
+        callbacks.customizeUiComponent(self.mainpanel)
+        callbacks.addSuiteTab(self)
 
         #set default config file name and values
-        self._configFile = "bsb.ini"
-        self._jsonFile = "data.json"
-        self._configNumberOfTests_Path = 5
-        self._configNumberOfTests_Files = 5
-        self._configNumberOfTests_Extensions = 5
-        self._configNumberOfTests_Directories = 5
-        self._configSpider_RecursiveDirs = 5
-        self._configSpider_NumberOfPages = 5
+
+        #only smart is use, keeping other for future development
         self._configSmart_Local = False
         self._configSmart_Smart = True
         self._configSmart_File = False
         self._configSmart_Spider = False
-        self._configInScope_only = True
         self._trailingSlash = True
-        self._verbose = True
+
+        #To be fetch from the UI settings
+        self._configSpider_NumberOfPages = 5
+        self._verbose = False
         self._ignoreFileType = ["gif","jpg","png","css","js","ico","woff"]
+        #keeping to use it
+        self._configInScope_only = True
+        self._configSpider_NumberOfPages = 5
 
         #Get a logger object for logging into file
         loggerTemp = Logger(self.EXTENSION_NAME,logging.DEBUG)
         self._logger= loggerTemp.getLogger()
 
         #get the config file, will overwrite default config if the ini file is different
-        self.getSmartConfiguration()
+        #self.getSmartConfiguration()
+
+        #get config from the UI
+        self.updateConfig("")
 
         #words gather on the page from the spidering
         self._words = {}
@@ -175,12 +299,13 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
         self._siteRobotScanned = {}
 
         #Load our BSB json data
+        self._jsonFile = "data.json"
         jsonfile = open(self._jsonFile)
         self._parsed_json = json.load(jsonfile)
         jsonfile.close()
 
         #define the request object to use each time we need to call a URL
-        self._requestor = Requestor(self._logger)
+        self._requestor = Requestor(self._logger,self)
 
         #Variable to define if unique data has already been grabbed
         self._smartRequestData = {}
@@ -192,36 +317,167 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
         return
 
     '''
-    Extension Unloaded
+    Graphic Functions
     '''
+    def createMenuItems(self, contextMenuInvocation):
+        self._contextMenuData = contextMenuInvocation.getSelectedMessages()
+        menu_list = ArrayList()
+        menu_list.add(JMenuItem("Send to BurpSmartBuster",actionPerformed=self.menuItemClicked))
+        return menu_list
+
+    def menuItemClicked(self, event):
+        data = self.getURLdata(self._contextMenuData[0],True)
+        self._logger.info("SMARTREQUEST FOR: "+data.getUrl().toString())
+        self._logger.debug("Executing: smartRequest() from menuItemClicked")
+        thread = threading.Thread(
+            target=self.smartRequest,
+            name="Thread-smartRequest",
+            args=[data],)
+        thread.start()
+
+    # Implement ITab
+    def getTabCaption(self):
+        return self.EXTENSION_NAME
+
+    # Return our panel and button we setup. Components of our extension's tab
+    def getUiComponent(self):
+        return self.mainpanel
+
+    '''------------------------------------------------
+    Extension Unloaded
+    ------------------------------------------------'''
     def extensionUnloaded(self):
         self._logger.info("Extension was unloaded")
         return
 
-    '''
+    '''------------------------------------------------
     VERBOSE FUNCTION
-    Display each URL tested
-    '''
+
+    Display each tested URL
+    ------------------------------------------------'''
     def verbose(self,text):
         #Is verbose on or off from config file?
-        if self._verbose:
+        if self._verbose == True:
             print "[VERBOSE]: "+text
         return
 
-    '''
+    '''------------------------------------------------
+    GRAPHICAL FUNCTIONS for BUTTONS
+    ------------------------------------------------'''
+
+    def getRecursiveConfig(self):
+        return int(self.spiderRecPagesTextField.getText())
+
+    #refresh the config from the UI
+    def updateConfig(self,meh):
+        self._configSpider_NumberOfPages = int(self.spiderPagesTextField.getText())
+
+        if self.yesVerboseButton.isSelected():
+            self._verbose = True
+        else:
+            self._verbose = False
+
+        if self.yesInScopeButton.isSelected():
+            self._configInScope_only = True
+        else:
+            self._configInScope_only = False
+
+        fileType = []
+        fileTypeStr = self.fileTypeTextField.getText()
+        self._ignoreFileType = self.fileTypeTextField.getText().split(",")
+
+        self._logger.info("Config changed: " + "spiderNbrPages=" + str(self._configSpider_NumberOfPages) + ", Verbose is:" + str(self._verbose) + ", InScope is:" + str(self._configInScope_only) + ", fileTypeIgnored: " + str(self._ignoreFileType))
+        print "Now using config: " + "spiderNbrPages=" + str(self._configSpider_NumberOfPages) + ", Verbose is:" + str(self._verbose) + ", InScope is:" + str(self._configInScope_only) + ", fileTypeIgnored: " + str(self._ignoreFileType)
+
+        return
+
+    #add a URL to the list
+    def addURL(self,url):
+        list = self.getListData()
+        list.append(url)
+
+        self.list.setListData(list)
+        return
+
+    #return the who list
+    def getListData(self):
+        list = []
+
+        for i in range(0, self.list.getModel().getSize()):
+            list.append(self.list.getModel().getElementAt(i))
+
+        return list
+
+    #Clear the list
+    def clearList(self,meh):
+        self.list.setListData([])
+        return
+
+    #Copy to clipboard
+    def copyList(self,meh):
+        clipboard = Toolkit.getDefaultToolkit().getSystemClipboard()
+        list = self.getListData()
+        selected = self.list.getSelectedIndices().tolist()
+
+        copied = ""
+        urls = ""
+        for i in selected:
+            url = str(list[i]).split(',')[0]
+            urls = urls+str(url)+"\n"
+
+        clipboard.setContents(StringSelection(urls), None)
+
+        return
+
+    #Delete selected item from the list
+    def deleteSelected(self,meh):
+        x = self.list.getSelectedIndices().tolist()
+        list = self.getListData()
+
+        for i in reversed(x):
+            del list[i]
+
+        self.list.setListData(list)
+        return
+
+    #TODO: save as the list
+    def exportList(self,meh):
+        fd = JFileChooser()
+        dialog = fd.showDialog(self.mainpanel, "Save List As")
+
+        dataList = self.getListData()
+
+        urls = ""
+
+        if dialog == JFileChooser.APPROVE_OPTION:
+            file = fd.getSelectedFile()
+            path = file.getCanonicalPath()
+
+            try:
+                with open(path, 'w') as exportFile:
+                    for item in dataList:
+                        url = str(item).split(',')[0]
+                        exportFile.write(url+"\n")
+            except IOError as e:
+                print "Error exporting list: " + str(e)
+                self._logger.debug("Error exporting list to: " + path + ", Error: " + str(e))
+
+        return
+
+    '''------------------------------------------------------------------------------------------------
     MAIN FUNCTION / WHERE EVERYTHING STARTS
 
     For every request which isn't created from the Extender(this might have to be change)
     The request is analyse and related to the config options new request are create to test if
     specific files/paths/directories exists.
-    '''
+    ------------------------------------------------------------------------------------------------'''
     def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo): #IHttpRequestResponse message info
 
 
         #TODO: not from repeater and intruder --> set in ini file too! --> and toolFlag != self._callbacks.TOOL_EXTENDER
 
         #This is required to not LOOP Forever as our plugin generate requests!
-        if toolFlag == self._callbacks.TOOL_PROXY and toolFlag != self._callbacks.TOOL_EXTENDER:
+        if toolFlag == self._callbacks.TOOL_PROXY and toolFlag != self._callbacks.TOOL_EXTENDER and toolFlag != self._callbacks.TOOL_SCANNER:
 
             #Get an Urldata object to use later
             data = self.getURLdata(messageInfo,messageIsRequest)
@@ -315,10 +571,6 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
     ----------------------------------------------------------------------------------------------------------'''
     def fileRequest(self, data):
         return
-
-    #
-    # TODO: ADD A FULL feature VS Smart. Remove others!
-    #
 
 
     '''----------------------------------------------------------------------------------------------------------
@@ -469,7 +721,20 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
         #TODO: important put tested directories and files in a dictionnary or array
         #TODO: important put tested directories and files in a dictionnary or array
         #TODO: important put tested directories and files in a dictionnary or array
-        #TODO: important put tested directories and files in a dictionnary or array
+        #TODO: important put tested directories and files in a dictionnary or arrayà
+
+
+        ########################
+        # Technology scanner
+        ########################
+        '''
+        - do a request to root dir
+        - get response (check for redirect)
+        - check headers
+        - check file extensions
+        - depending on results scan X files.
+          - Set current domain technologyVar to X
+        '''
 
         ################
         #Scan the root directory!
@@ -479,8 +744,6 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
         if not directories:
             directories = ["/"]
 
-        #TODO: Add recursive directory when a directory is found. Number of recursive directory is in ini file
-        #TODO: replace print with requestor object that add the url to the queue in a thread, no need to wait for join
         # response will be dealed in requestor
         for dir in directories:
             print "TESTING: " + dir
@@ -650,6 +913,8 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
         # - Get current query path and files & Filter out static object from the request (images,etc.)
         #filter out: gif,jpg,png,css,ico
 
+
+        print "Done. Waiting for more URL...!"
 
     '''----------------------------------------------------------------------------------------------------------
     Get the data for smartRequest(), it will fills our list of words which will be our smart logic data to create
@@ -901,84 +1166,10 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
         return
 
     '''
-    Function to get configurations of our SmartBuster plugin
-    '''
-    def getSmartConfiguration(self):
-        #Verify is file exist
-        if not os.path.exists(self._configFile):
-            #if not create the file
-            config = self.setSmartConfiguration()
-        else:
-            #get the config file, newly created or not
-            config = ConfigParser.ConfigParser()
-            config.read(self._configFile)
-
-            #get config values
-            self._configNumberOfTests_Path = int(config.get('NumberOfTests','Paths'))
-            self._configNumberOfTests_Files = int(config.get('NumberOfTests','Files'))
-            self._configNumberOfTests_Extensions = int(config.get('NumberOfTests','Extensions'))
-            self._configNumberOfTests_Directories = int(config.get('NumberOfTests','Directories'))
-            self._configSpider_RecursiveDirs = int(config.get('Spider','RecursiveDirs'))
-            self._configSpider_NumberOfPages = int(config.get('Spider','NumberOfPages'))
-            self._configSmart_Local = config.get('Smart','Local')
-            self._configSmart_Smart = config.get('Smart','Smart')
-            self._configSmart_File = config.get('Smart','File')
-            self._configSmart_Spider = config.get('Smart','Spider')
-            self._verbose = config.get('Smart', 'Verbose')
-            self._configInScope_only = config.get('InScope','ScopeOnly')
-            self._trailingSlash = config.get('Technical','TrailingSlash')
-            self._ignoreFileType = config.get('Ignore','FileType').split(",")
-
-        #DEBUG: printing options
-        #dictionary = {}
-        #for section in config.sections():
-        #    dictionary[section] = {}
-        #    self._logger.debug("section: "+ str(section))
-        #    for option in config.options(section):
-        #        self._logger.debug("Options: " + str(config.get(section, option)))
-
-        return
-
-    '''
-    Function to set configurations of our SmartBuster plugin if none are found in the current directory
-    '''
-    def setSmartConfiguration(self):
-        config = ConfigParser.ConfigParser()
-
-        #set config with default values
-        config.add_section('NumberOfTests')
-        config.set('NumberOfTests','Paths',self._configNumberOfTests_Path)
-        config.set('NumberOfTests','Files',self._configNumberOfTests_Files)
-        config.set('NumberOfTests','Extensions',self._configNumberOfTests_Extensions)
-        config.set('NumberOfTests','Directories',self._configNumberOfTests_Directories)
-        config.add_section('Spider')
-        config.set('Spider','RecursiveDirs',self._configSpider_RecursiveDirs)
-        config.set('Spider','NumberOfPages',self._configSpider_NumberOfPages)
-        config.add_section('Smart')
-        config.set('Smart','Local',self._configSmart_Local)
-        config.set('Smart','Smart',self._configSmart_Smart)
-        config.set('Smart','File',self._configSmart_File)
-        config.set('Smart','Spider',self._configSmart_Spider)
-        config.set('Smart', 'Verbose', self._verbose)
-        config.add_section('InScope')
-        config.set('InScope','ScopeOnly',self._configInScope_only)
-        config.add_section('Technical')
-        config.set('Technical','TrailingSlash',self._trailingSlash)
-        config.add_section('Ignore')
-        config.set('Ignore','FileType',",".join(self._ignoreFileType))
-
-        #write config to file
-        with open(self._configFile, 'w') as configfile:
-            config.write(configfile)
-
-        return config
-
-    '''
     This functions split all informations of the URL for further use in the smartRequest function
     @param messageInfo: last request executed with all its information
     '''
     def getURLdata(self,messageInfo,messageIsRequest):
-
 
         analyzedRequest = self._helpers.analyzeRequest(messageInfo)
         url = analyzedRequest.getUrl()
@@ -986,7 +1177,7 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
 
         parsed = urlparse(url.toString())
 
-        '''
+        '''debug info
         print 'scheme  :', parsed.scheme
         print 'netloc  :', parsed.netloc
         print 'path    :', parsed.path
@@ -998,7 +1189,6 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
         print 'hostname:', parsed.hostname, '(netloc in lower case)'
         print 'port    :', parsed.port
         '''
-
 
         #Is there any parameters?
         params = analyzedRequest.getParameters()
@@ -1074,13 +1264,13 @@ class BurpExtender(IBurpExtender, IScanIssue, IScannerCheck, IScannerInsertionPo
         else:
             return 0
 
+    #Have to be implemented
     def doPassiveScan(self, baseRequestResponse):
         pass
 
+    #Have to be implemented
     def doActiveScan(self, baseRequestResponse, insertionPoint):
         pass
-
-
 '''
 Multithreaded class to execute queries out of the Queue.Queue
 
@@ -1088,7 +1278,7 @@ Also get the response and validate the 404 type
 '''
 class RequestorWorker(threading.Thread):
 
-    def __init__(self, threadID, name, queue, responseQueue, logger, requestor):
+    def __init__(self, threadID, name, queue, error404, logger, requestor, UI, recursiveURLs):
 
         #Sahred Queue between Thread Workers
         self._id = threadID
@@ -1098,9 +1288,12 @@ class RequestorWorker(threading.Thread):
         self._alive = True
         threading.Thread.__init__(self)
         self.daemon = True
-        self._responseQueue = responseQueue
+        #self._responseQueue = responseQueue
+        self._error404 = error404
         self._logger = logger
         self._requestor = requestor
+        self._ui = UI
+        self._recursiveURLs = recursiveURLs
 
         self._acceptedCode = (200,400,401,403,500)
 
@@ -1111,66 +1304,107 @@ class RequestorWorker(threading.Thread):
 
         return
 
+    '''
+    Return type of 404 for requested domain
+
+    @param domain: domain to fetch error 404 type
+    '''
+    def _getError404(self,url):
+        #Get domain and netloc
+        parsed = urlparse(url)
+        netloc = parsed.netloc.encode("utf-8")
+        domain = netloc.split(':')[0]
+        return self._error404[domain]
+
     def run(self):
         while(self._alive):
             #waiting for queue
             #print "Waiting for queue: "+self._name
             url = self._queue.get()
-            # Get domain and netloc
-            #parsed = urlparse(url)
-            #netloc = parsed.netloc.encode("utf-8")
-            #domain = netloc.split(':')[0]
-
-            #request the data, etc. see todo below
 
             #print "TASK RECEIVED: " + url + " From: " + self._name
-
-            #TODO: add http protocol/service in data
 
             self._logger.debug(self._name+" requesting(URL): " + url)
             self._logger.info(self._name+" requesting(URL): " + url)
             #print "[Requesting] " + url
+
+            #TODO: randomizedUserAgent
+            #TODO: - 302 (redirect) --> parse the redirect URL (in scope ok, in sitemap stop, not in site map  add to queue : 200+window.location or JS isn't catch yet
+
             response = requests.get(url, headers=self._headers, allow_redirects=False)
 
-            #TODO: if title contains 404, page not found
-            #TODO: if body contain 404, page not found
-
-
-
             if response.status_code in self._acceptedCode:
-                print "[URL EXISTS](" +str(response.status_code)+ ") "+ url
+                #add no false positive to site map
+                code = self._getError404(url)
+                print "[URL EXISTS](Response: " +str(response.status_code)+ ") | 404 type:" + str(code) +" | FOR URL: "+ str(url)
 
+                #False positive logic.
+                #TODO: can be update or upgraded for sure! :)
+                fp = ""
+
+
+                '''
+                si 404
+                    si response 200 ok
+                    si response 401
+                    si response 403
+                    si response 300
+                    si response 500
+                si 403
+                    si response 200
+                    si response 401 fp
+                    si response 403 fp
+                    si response 300
+                    si response 500 fp
+                si 500
+                    si response 200
+                    si response 401
+                    si response 403
+                    si response 300
+                    si response 500 fp
+                si intext
+                    si response 200 need reverification fp
+                    si response 401
+                    si response 403
+                    si response 300
+                    si response 500
+                si 300
+                    si response 200
+                    si response 401
+                    si response 403
+                    si response 300 fp
+                    si response 500
+                '''
+
+                #if the current request is a 403 and the 404 page isn't a 403 page, should be false positive
+                if response.status_code == 403 and code != 403:
+                    fp = " ,False Positive"
+                #if current response is a 200 and the 404 page was inside a 200 code page, it can be a false positive
+                elif response.status_code == 200 and code == "404 in page":
+                    fp = " ,False Positive"
+                #if 404 page is inside a 200 response code, a 300 redirect page or a 403, many possible false positive
+                elif code == "404 in page" or code == 300 or code == 403:
+                    fp = " ,Possible False Positive"
+                #code is 200 or whatnot
+                else: #TODO: define all directory in a list and add to the recursive list+validate latest directory of current url to see if it is in list, if not add it
+                    print 200
+                    #if it's a direct directory, let's recurse... if not recurse too much already!
+                    #if urlparse(url).path[-1] == '/' and self._recursiveURLs.get(str(url), 0) <= self._ui.getRecursiveConfig():
+                    #    self._recursiveURLs[str(url)] = self._recursiveURLs.get(str(url), 0) + 1 #adjust the recursed level for that directory
+                    #    self._requestor.runRequest(url,Queue.Queue(1))
+
+                #add code to the Jlist here
+                print url
+                self._ui.addURL(url + " , ("+str(response.status_code)+")" + fp)
+
+
+
+                #TODO: add page to SiteMap if not there already?
 
                 #TODO: issue = SmartBusterIssue()
                 #might need to parse the url into data for the issue?
                 #issue=ScanIssue(baseRequestResponse.getHttpService(), self._helpers.analyzeRequest(baseRequestResponse).getUrl(), httpmsgs, ISSUE_NAME, ISSUE_DETAIL, SEVERITY, CONFIDENCE, REMEDIATION_DETAIL, ISSUE_BACKGROUND, REMEDIATION_BACKGROUND)
                 #self._callbacks.addScanIssue(issue)
-
-                #for further use if needed
-                #self._responseQueue.put(response)
-        #return
-
-
-
-        '''
-        TODO:
-        - add the request to the class queue
-            - verify if the URL is already in sitemap
-            - If not do it
-        - Parse the queue
-        - Send a request
-        - Parse the response
-        - Get the response code
-            - 200, 401, 403 --> add to sitemap (403 might be false positive, can't know for sure)
-            - 302 (redirect) --> parse the redirect URL (in scope ok, in sitemap stop, not in site map  add to queue : 200+window.location or JS isn't catch yet
-            - 500: add to log file
-            - 404, remove from queue
-            - Log each result, verbose it too
-        '''
-
-
-
-
 
 '''----------------------------------------------------------------------------------------------------------------------------------------
 Class to hold the Request data
@@ -1184,17 +1418,22 @@ class Requestor():
     Initialize
 
     '''
-    def __init__(self,logger):
+    def __init__(self,logger,UI):
 
         #Queue to hold URL to request
         #Each item will be a URL string str(URL)
         self._requestQueue = Queue.Queue(0)
         self._logger = logger
+
+        #hold type of 404 error by domain
         self._error404 = {}
+
+        #hold url that are being recursive
+        self._recursiveURLs = []
 
         #Queue to hold URL and their response code
         #Each item will be a list (url,code)
-        self._responseQueue = deque()
+        #self._responseQueue = deque()
 
          #TODO: Set a randomizer of user-agent and add the option in .ini file
         self._headers = {
@@ -1203,37 +1442,43 @@ class Requestor():
 
         self._logger.debug("Requestor object created")
 
-        #TODO: Set a number of thread in config ini file
-        #TODO: Launch N Thread Workers
-
         threads = [] #list containing threads
 
         #1 thread needed for infofestival. Don't know how to split the pages between workers
-        for i in range(0,40):
-            t = RequestorWorker(i,"RequestorWorker-"+str(i),self._requestQueue,self._responseQueue, logger, self)
+        for i in range(0,40):#TODO: Set a number of thread in UI
+            t = RequestorWorker(i,"RequestorWorker-"+str(i),self._requestQueue,self._error404, logger, self, UI, self._recursiveURLs)
             threads.append(t)
             t.start()
 
-        # Wait for all threads to complete
-        #for t in threads:
-        #    t.join()
+        return
 
+
+    '''
+    Add a request to the queue to be execute by a thread worker (RequestorWorker)
+
+    @param url: the URL to get a response from
+    '''
+    def addRequest(self,url,data):
+
+
+        #print "ADDING: "+ url
+
+        #get the 404 details for the current domain
+        self._define404(data)
+        self._requestQueue.put(url) ##see if we can put the type404 inside the queue along with the url
         return
 
     '''
-    Checks for the 404 page of a specific domain
-
-    @param filename: Save the Queued data to the filename
+    Define 404 type of the current domain
     '''
     def _define404(self,data):
 
         domain = data.getDomain()
-
         #only do once per domain
         if domain not in self._error404:
-            self._error404[domain] = True
-            errorQueue = Queue.Queue(0)
+
             code = 404
+            errorQueue = Queue.Queue(0)
 
             #get a 404 page
             m = hashlib.md5()
@@ -1246,66 +1491,40 @@ class Requestor():
 
             #if website use standard 404 error, everything is good
             if response.status_code == 404:
-                return
+                code = 404
 
-            #if website used a 30x code
+            #if website used a 3xx code
             if 310 - response.status_code < 11 and 310 - response.status_code > 0:
                 code = 300
+
+            if response.status_code == 403:
+                code = 403
+
+            #if website use a 5xx code
+            if 510 - response.status_code < 11 and 510 - response.status_code > 0:
+                code = 500
 
             #if website use a 200
             if response.status_code == 200:
 
                 soup = BeautifulSoup(response.content, "html.parser")
 
-                if soup.findAll(text=re.compile("page not found")):
-                    code = "page not found"
-                elif soup.findAll(text=re.compile("404")):
-                    code = "404"
-
                 ################################
                 #TODO: more use case to add
                 ################################
+                if soup.findAll(text=re.compile("page not found")):
+                    code = "404 in page"
+                elif soup.findAll(text=re.compile("404")):
+                    code = "404 in page"
+                elif soup.findAll(text=re.compile("page does not exist")):
+                    code = "404 in page"
+                elif soup.findAll(text=re.compile("error 404")):
+                    code = "404 in page"
 
             #define which code is refer to a 404
             self._error404[domain] = code
 
         return
-
-    '''
-    Return type of 404 for requested domain
-
-    @param domain: domain to fetch error 404 type
-    '''
-    def getError404(self,domain):
-        return self._error404[domain]
-
-    '''
-    Save to CSV
-
-    @param filename: Save the Queued data to the filename
-    '''
-    def saveToCSV(self,filename):
-        writer = csv.writer(open(filename+'.csv', 'a', buffering=0))
-
-        for item in self._responseQueue:
-            writer.writerow([item])
-
-        return
-
-    '''
-    Add a request to the queue to be execute by a thread worker (RequestorWorker)
-
-    @param url: the URL to get a response from
-    '''
-    def addRequest(self,url,data):
-
-        #get the 404 details for the current domain
-        #print "ADDING: "+ url
-
-        #type404 = self._define404(data)
-        self._requestQueue.put(url) ##see if we can put the type404 inside the queue along with the url
-        return
-
 
     '''
     Run a NON DELAYED (no thread workers) request and save the url:response code to the response deque class variable
@@ -1484,7 +1703,46 @@ class Spider():
          return self._words
 
 
+'''----------------------------------------------------------------------------------------------------------------------------------------
+Class to share community data to annonimized server
+----------------------------------------------------------------------------------------------------------------------------------------'''
+class technologyScanner():
 
+    def __init__(self, optIn, logger):
+        self._optIn = optIn
+        self._logger = logger
+
+        self._logger.debug("CommunityData Object Created")
+
+        return
+
+'''----------------------------------------------------------------------------------------------------------------------------------------
+Class to share community data to annonimized server
+----------------------------------------------------------------------------------------------------------------------------------------'''
+class communityData():
+
+    def __init__(self, optIn, logger):
+        self._optIn = optIn
+        self._logger = logger
+
+        self._logger.debug("CommunityData Object Created")
+
+        return
+
+    def submitData(self,fileName,isFile):
+        if self._optIn:
+
+            #prepare the request to submit to the server
+            if isFile:
+                print "Data is a file"
+                #data to sent is a file
+            else:
+                print "data is a directory"
+                #data to sent is a directory
+
+            #contact the server
+            print "contacting the server with data: " + fileName
+        return
 
 '''----------------------------------------------------------------------------------------------------------------------------------------
 Class to hold the URL data in separated parts
