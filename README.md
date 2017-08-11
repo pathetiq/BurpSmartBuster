@@ -23,11 +23,10 @@ A Burp Suite content discovery plugin that add the smart into the Buster!
 
 # Todos
 
-* Technological and environment checks (PHP, IIS, Apache, SharePoint, etc.)
-* Add a GUI
+* In progress: Technological and environment checks (PHP, IIS, Apache, SharePoint, etc.)
+* In progress: Community data
 * Limit Thread speed
 * Use the spidering results for actual brute forcing
-* Adjust the 404 detection function
 
 ## Presentations and release date
 
