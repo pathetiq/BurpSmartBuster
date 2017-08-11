@@ -14,10 +14,10 @@ A Burp Suite content discovery plugin that add the smart into the Buster!
 
 * Looks for files, directories and file extensions based on current requests received by Burp Suite
 * Checks for:
- * Directories in the current URL directories
- * Files in the current URL directories 
- * Replace and add extension to current files
- * Add suffix and prefix to current files
+  * Directories in the current URL directories
+  * Files in the current URL directories 
+  * Replace and add extension to current files
+  * Add suffix and prefix to current files
 * Easy and documented code
 * Verbose and logging 
 
