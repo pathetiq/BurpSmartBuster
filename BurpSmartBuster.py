@@ -99,7 +99,7 @@ class TrustAllCertsManager(X509TrustManager):
 
 # Set the trust all certificate manager as the default ssl context
 try:
-    sslContext = SSLContext.getInstance("SSL");
+    sslContext = SSLContext.getInstance("TLS");
     sslContext.init(None, [TrustAllCertsManager()], None);
     HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
 except Exception, e:
