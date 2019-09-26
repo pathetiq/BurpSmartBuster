@@ -44,6 +44,8 @@ from burp import IBurpExtenderCallbacks
 from burp import IContextMenuFactory
 from java.util import List, ArrayList
 from burp import ITab
+from javax.net.ssl import X509TrustManager, SSLContext, HttpsURLConnection
+from java.security import SecureRandom
 from javax.swing import JPanel, JLabel, JMenuItem, JTextField, JList, DefaultListModel, JButton, JFileChooser
 from javax.swing import JScrollPane, ListSelectionModel, GroupLayout, ButtonGroup, JRadioButton
 from java.awt import Dimension
@@ -83,8 +85,26 @@ locals()
 #http://textminingonline.com/getting-started-with-textblob
 from textblob import TextBlob
 
+# Define a trust all certificate manager
+class TrustAllCertsManager(X509TrustManager):
 
+  def getAcceptedIssuers(self): 
+      pass
+  
+  def checkClientTrusted(self, certs, authType):
+      pass
 
+  def checkServerTrusted(self, certs, authType):
+      pass
+
+# Set the trust all certificate manager as the default ssl context
+try:
+    sslContext = SSLContext.getInstance("SSL");
+    sslContext.init(None, [TrustAllCertsManager()], None);
+    HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
+except Exception, e:
+    print('Failed to trust all certs!')
+    print(e)
 
 '''----------------------------------------------------------------------------------------------------------------------------------------
 BurpSmartBuster Logging object and config
