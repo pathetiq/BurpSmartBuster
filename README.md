@@ -1,5 +1,5 @@
 # Unsupported anymore
-This applicaiton is unsupported anymore, but a new "version" is coming in the next few months! :)
+This application is unsupported anymore, but a new "version" is coming in the next few months! :)
 
 ![BSB](http://i.imgur.com/rHToHhe.png)
 
